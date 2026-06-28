@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agent-cost — token cost for tool-calling agents</title>
+<meta name="description" content="An interactive estimator showing why multi-turn tool-calling agents get expensive: the conversation history is replayed every turn, so cost grows quadratically. Supports major currencies.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#faf9f7; --ink:#18181b; --mut:#6b6b70; --faint:#9a9a9f;
+  --line:#e6e4e0; --line2:#d6d3ce; --panel:#fffefc;
+  --accent:#ea580c; --accent-soft:#fdf0e9;
+  --base:#475569; --hist:#ea580c; --res:#0d9488; --out:#cbd5e1;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#121110;--ink:#ece9e4;--mut:#a3a09a;--faint:#6f6c66;--line:#2a2825;--line2:#3a3733;--panel:#1a1917;--accent:#fb923c;--accent-soft:#2a1d14;--base:#94a3b8;--out:#475569;}
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,sans-serif;line-height:1.65;font-size:16px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:840px;margin:0 auto;padding:3rem 1.5rem 5rem}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:1.1rem}
+h1{font-size:2.4rem;font-weight:600;letter-spacing:-0.03em;line-height:1.08}
+.sub{color:var(--mut);margin-top:.9rem;max-width:600px;font-size:1.02rem}
+hr{border:none;border-top:1px solid var(--line);margin:2.25rem 0}
+
+.bar{display:flex;flex-wrap:wrap;gap:1.5rem 2rem;align-items:flex-end}
+.field{flex:1;min-width:150px}
+.field label{display:block;font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:.45rem}
+.field label b{color:var(--ink);font-weight:500}
+select{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:7px;padding:8px 9px;font-family:'Inter';font-size:.9rem}
+input[type=range]{width:100%;accent-color:var(--accent);height:4px}
+input[type=number]{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--line2);border-radius:7px;padding:7px 8px;font-family:var(--mono);font-size:.85rem}
+.prices{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.55rem}
+.prices .lab{font-family:var(--mono);font-size:.64rem;color:var(--faint);margin-bottom:.2rem}
+.check{display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.92rem;color:var(--ink);user-select:none}
+.check input{accent-color:var(--accent);width:16px;height:16px}
+
+.figs{display:grid;grid-template-columns:repeat(3,1fr);margin:2rem 0 1.25rem;border-top:1px solid var(--line)}
+.fig{padding:1.1rem 1.2rem 0 0;border-right:1px solid var(--line)}
+.fig:last-child{border-right:none;padding-right:0;padding-left:1.2rem}
+.fig .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+.fig .v{font-family:var(--mono);font-size:2rem;font-weight:500;letter-spacing:-0.02em;margin-top:.3rem;font-variant-numeric:tabular-nums}
+.fig.hot .v{color:var(--accent)}
+
+.chartwrap{margin-top:.5rem}
+.note{font-size:.95rem;color:var(--mut);margin-top:1.4rem;padding-left:1rem;border-left:2px solid var(--accent)}
+.note b{color:var(--ink);font-weight:500}
+
+.actions{display:flex;gap:.65rem;margin-top:1.6rem}
+button{font-family:var(--mono);font-size:.8rem;letter-spacing:.03em;border-radius:7px;padding:9px 15px;cursor:pointer;border:1px solid var(--line2);background:transparent;color:var(--mut)}
+button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+.read{margin-top:3rem;color:var(--mut);font-size:.97rem}
+.read h2{font-size:1.1rem;font-weight:600;color:var(--ink);margin:1.6rem 0 .55rem}
+.read code{font-family:var(--mono);font-size:.84em;background:var(--accent-soft);color:var(--accent);padding:1px 5px;border-radius:4px}
+.fine{color:var(--faint);font-size:.85rem;margin-top:.9rem}
+footer{margin-top:3rem;padding-top:1.4rem;border-top:1px solid var(--line);display:flex;justify-content:space-between;flex-wrap:wrap;gap:.75rem;font-family:var(--mono);font-size:.78rem;color:var(--faint)}
+footer a{color:var(--mut);text-decoration:none;border-bottom:1px solid transparent}
+footer a:hover{border-bottom-color:var(--accent);color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">agent-cost</div>
+  <h1>Why tool-calling agents<br>get expensive.</h1>
+  <p class="sub">An agent resends the entire conversation every turn — so input tokens compound and cost grows <b>quadratically</b> with turns, not linearly. Adjust the inputs and watch where the money goes.</p>
+
+  <hr>
+
+  <div class="bar">
+    <div class="field">
+      <label>model</label>
+      <select id="model"></select>
+      <div class="prices">
+        <div><div class="lab">USD in / 1M</div><input id="pin" type="number" step="0.01" value="2.50"></div>
+        <div><div class="lab">USD out / 1M</div><input id="pout" type="number" step="0.01" value="10.00"></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>currency</label>
+      <select id="cur"></select>
+      <label class="check" style="margin-top:.7rem"><input id="cache" type="checkbox"> prompt caching</label>
+    </div>
+  </div>
+
+  <div class="bar" style="margin-top:1.6rem">
+    <div class="field"><label>turns <b id="lt">8</b></label><input id="turns" type="range" min="1" max="20" value="8"></div>
+    <div class="field"><label>tool result tokens / turn <b id="lr">3,000</b></label><input id="res" type="range" min="0" max="15000" step="250" value="3000"></div>
+    <div class="field"><label>output / turn <b id="lo">600</b></label><input id="out" type="range" min="100" max="4000" step="100" value="600"></div>
+    <div class="field"><label>system prompt <b id="ls">800</b></label><input id="sys" type="range" min="0" max="6000" step="100" value="800"></div>
+  </div>
+
+  <div class="figs">
+    <div class="fig"><div class="k">total cost</div><div class="v" id="cost">—</div></div>
+    <div class="fig"><div class="k">total tokens</div><div class="v" id="tok">—</div></div>
+    <div class="fig hot"><div class="k">paid to replay history</div><div class="v" id="hist">—</div></div>
+  </div>
+
+  <div class="chartwrap"><canvas id="chart" height="118"></canvas></div>
+  <p class="note" id="msg"></p>
+
+  <div class="actions">
+    <button class="primary" id="copy">copy shareable link</button>
+    <button id="reset">reset</button>
+  </div>
+
+  <div class="read">
+    <h2>the math</h2>
+    <p>At turn <code>t</code> the model receives the system prompt plus everything before it: <code>input(t) = base + (t−1)·(output + tool_result) + tool_result</code>. Summed over <code>N</code> turns the replayed-history term grows like <code>N²</code>. Output is billed once per turn.</p>
+    <h2>the two levers</h2>
+    <p>Turns make history compound; large tool results get replayed on every later turn. Truncating tool payloads and enabling prompt caching — which bills the repeated prefix at roughly a tenth — are the highest-leverage fixes. Most surprise bills are one of these two.</p>
+    <p class="fine">Provider prices are entered in USD and editable. Currency totals use approximate live rates and are a client-side estimate, not a billing guarantee.</p>
+  </div>
+
+  <footer>
+    <span>built by anurag k. sharma</span>
+    <span>
+      <a href="https://github.com/akrishnash/akrishnash.github.io/tree/main/agent-cost">source</a> ·
+      <a href="https://akrishnash.github.io">site</a> ·
+      <a href="https://github.com/akrishnash">github</a>
+    </span>
+  </footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const MODELS=[
+  {n:"GPT-4o",in:2.50,out:10.00},{n:"GPT-4o mini",in:0.15,out:0.60},
+  {n:"o-series (reasoning)",in:15.00,out:60.00},{n:"Claude Sonnet",in:3.00,out:15.00},
+  {n:"Claude Haiku",in:0.80,out:4.00},{n:"Gemini Flash",in:0.075,out:0.30},{n:"custom",in:2.00,out:8.00}];
+const CUR={
+  USD:{s:"$",r:1,d:2}, INR:{s:"₹",r:85,d:2}, EUR:{s:"€",r:0.92,d:2}, GBP:{s:"£",r:0.79,d:2},
+  JPY:{s:"¥",r:157,d:0}, CNY:{s:"CN¥",r:7.2,d:2}, SGD:{s:"S$",r:1.35,d:2}, AUD:{s:"A$",r:1.52,d:2},
+  CAD:{s:"C$",r:1.37,d:2}, AED:{s:"AED ",r:3.67,d:2}, BRL:{s:"R$",r:5.4,d:2}, KRW:{s:"₩",r:1380,d:0}};
+const $=id=>document.getElementById(id), USER=300;
+const C={base:getCss('--base'),hist:getCss('--hist'),res:getCss('--res'),out:getCss('--out')};
+function getCss(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+const sel=$('model');
+MODELS.forEach((m,i)=>{const o=new Option(`${m.n}  ·  $${m.in} / $${m.out}`,i);sel.add(o);});
+const cs=$('cur');
+Object.keys(CUR).forEach(k=>cs.add(new Option(k,k)));
+
+const grid=getCss('--line'), tickc=getCss('--faint');
+const chart=new Chart($('chart'),{type:'bar',
+  data:{labels:[],datasets:[
+    {label:'base context',backgroundColor:C.base,data:[]},
+    {label:'replayed history',backgroundColor:C.hist,data:[]},
+    {label:'tool result',backgroundColor:C.res,data:[]},
+    {label:'output',backgroundColor:C.out,data:[]}]},
+  options:{responsive:true,animation:false,borderRadius:2,
+    scales:{x:{stacked:true,grid:{display:false},ticks:{color:tickc,font:{family:'JetBrains Mono',size:10}},title:{display:true,text:'turn',color:tickc,font:{family:'JetBrains Mono',size:10}}},
+            y:{stacked:true,grid:{color:grid},ticks:{color:tickc,font:{family:'JetBrains Mono',size:10}}}},
+    plugins:{legend:{labels:{color:tickc,boxWidth:11,font:{family:'Inter',size:11}}}}}});
+
+const tk=n=>n>=1e6?(n/1e6).toFixed(2)+'M':n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+'k':String(Math.round(n));
+function money(usd){const c=CUR[cs.value]||CUR.USD;const v=usd*c.r;
+  const s=v<1&&c.d<2?v.toFixed(3):v.toLocaleString(undefined,{minimumFractionDigits:c.d,maximumFractionDigits:c.d+(v<1?2:0)});
+  return c.s+s;}
+
+function calc(){
+  const pin=+$('pin').value/1e6,pout=+$('pout').value/1e6;
+  const N=+$('turns').value,r=+$('res').value,o=+$('out').value,sys=+$('sys').value;
+  const base=sys+USER,cached=$('cache').checked;
+  $('lt').textContent=N;$('lr').textContent=r.toLocaleString();$('lo').textContent=o;$('ls').textContent=sys;
+  const L=[],dB=[],dH=[],dR=[],dO=[];let cost=0,tok=0,hist=0;
+  for(let t=1;t<=N;t++){
+    const replay=(t-1)*(o+r),input=base+replay+r;
+    L.push(t);dB.push(base);dH.push(replay);dR.push(r);dO.push(o);
+    let inC; if(cached){const fresh=base+r;inC=(input-fresh)*pin*0.1+fresh*pin;}else inC=input*pin;
+    cost+=inC+o*pout;tok+=input+o;hist+=replay;}
+  chart.data.labels=L;[dB,dH,dR,dO].forEach((d,i)=>chart.data.datasets[i].data=d);chart.update();
+  $('cost').textContent=money(cost);$('tok').textContent=tk(tok);$('hist').textContent=Math.round(100*hist/tok)+'%';
+  $('msg').innerHTML=`At <b>${N} turns</b>, replayed history is <b>${Math.round(100*hist/tok)}%</b> of your tokens — pure repetition. `+
+    (cached?`Caching bills that prefix at ~10%, which is why the total dropped. `:`Enable <b>prompt caching</b> to bill the repeated prefix at ~10%. `)+
+    (r>500?`Truncating tool results from ${r.toLocaleString()} to 500 tokens erases most of the orange.`:`Tool results are lean.`);
+  syncURL();
+}
+function syncURL(){history.replaceState(null,'','?'+new URLSearchParams({m:sel.value,pi:$('pin').value,po:$('pout').value,t:$('turns').value,r:$('res').value,o:$('out').value,s:$('sys').value,c:$('cache').checked?1:0,cur:cs.value}));}
+function loadURL(){const p=new URLSearchParams(location.search);if(![...p].length)return;
+  const set=(id,k)=>{if(p.has(k))$(id).value=p.get(k);};
+  set('model','m');set('pin','pi');set('pout','po');set('turns','t');set('res','r');set('out','o');set('sys','s');set('cur','cur');
+  if(p.get('c')==='1')$('cache').checked=true;}
+
+sel.onchange=()=>{const m=MODELS[sel.value];$('pin').value=m.in;$('pout').value=m.out;calc();};
+['turns','res','out','sys','pin','pout','cache','cur'].forEach(id=>{$(id).oninput=calc;$(id).onchange=calc;});
+$('copy').onclick=()=>{navigator.clipboard.writeText(location.href);$('copy').textContent='copied';setTimeout(()=>$('copy').textContent='copy shareable link',1400);};
+$('reset').onclick=()=>location.href=location.pathname;
+
+cs.value='USD';
+loadURL();
+if(!new URLSearchParams(location.search).has('pi')){const m=MODELS[sel.value];$('pin').value=m.in;$('pout').value=m.out;}
+calc();
+fetch('https://open.er-api.com/v6/latest/USD').then(r=>r.json()).then(d=>{if(d&&d.rates){Object.keys(CUR).forEach(k=>{if(d.rates[k])CUR[k].r=d.rates[k];});calc();}}).catch(()=>{});
+</script>
+</body>
+</html>
