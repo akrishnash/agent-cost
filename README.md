@@ -9,7 +9,7 @@ high?" surprises come down to this one fact (plus fat tool results that get repl
 
 ### ▶ Live: https://akrishnash.github.io/agent-cost/
 
-<!-- Add a screenshot here: drop an image into the repo and reference it, e.g. ![screenshot](docs/screenshot.png) -->
+![agent-cost — per-turn token cost breakdown showing replayed history dominating the bill](docs/screenshot.png)
 
 ---
 
